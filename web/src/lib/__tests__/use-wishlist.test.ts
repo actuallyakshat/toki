@@ -6,13 +6,24 @@ import { api, ApiError } from "@/lib/api";
 import { itemsKey, listsKey, useAddItem, useDeleteItem, useUpdateItem } from "@/lib/hooks/use-wishlist";
 import type { Item } from "@/lib/types";
 
+// The hooks show their own error toasts; these tests only look at the cache.
+vi.mock("@/components/providers/toast-provider", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/lib/api", async (importActual) => {
   const actual = await importActual<typeof import("@/lib/api")>();
   return { ...actual, api: { updateItem: vi.fn(), deleteItem: vi.fn(), addItem: vi.fn() } };
 });
 
 const item = (id: string, position: number, over: Partial<Item> = {}): Item =>
-  ({ id, list_id: "l1", position, note: "", status: "wanted", target_price_minor: null, ...over }) as Item;
+  ({
+    id,
+    list_id: "l1",
+    position,
+    note: "",
+    status: "wanted",
+    target_price_minor: null,
+    product: { title: `Item ${id}`, current_price_minor: 1000 },
+    ...over,
+  }) as Item;
 
 let qc: QueryClient;
 const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client: qc }, children);
