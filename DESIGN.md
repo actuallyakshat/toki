@@ -1,6 +1,7 @@
 # Toki — design system
 
-Read this with `design/tokens.css`. Both UI apps (web, extension) use the same tokens.
+Read this with `design/tokens.css`. Every UI app (web, extension, mobile) uses the same tokens;
+the mobile app mirrors them in `mobile/src/theme/tokens.ts`.
 
 ## Idea
 
