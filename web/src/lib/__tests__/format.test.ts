@@ -63,16 +63,18 @@ describe("work time (CONTRACT.md time conversion)", () => {
     [0.01, "1 min"],
     [0.5, "30 min"],
     [1, "1 h"],
-    [12.5, "12 h 30 min"],
+    [6.5, "6 h 30 min"],
     [2.995, "3 h"], // 59.7 min rounds up into the next hour, never "2 h 60 min"
-    [47.9, "47 h 54 min"],
-    [48, "6 workdays"],
+    [7.9, "7 h 54 min"],
+    [8, "1 workday"], // a workday is hours_per_week / 5
+    [34.65, "4.3 workdays"],
     [52, "6.5 workdays"],
   ])("%f h → %s", (hours, want) => {
     expect(formatWork(hours, 40)).toBe(want);
   });
   it("formats a price as time and a total as hours", () => {
-    expect(formatTime(hourly * 12.5, income)).toBe("12 h 30 min");
+    expect(formatTime(hourly * 6.5, income)).toBe("6 h 30 min");
+    expect(formatTime(hourly * 12, income)).toBe("1.5 workdays");
     expect(formatTotalHours(hourly * 2300, income)).toBe("2,300 h of work");
   });
 });

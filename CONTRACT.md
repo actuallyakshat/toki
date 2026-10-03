@@ -234,7 +234,7 @@ hourly_minor = monthly_income_minor / (hours_per_week × 52 / 12)
 hours        = price_minor / hourly_minor
 ```
 
-Display: `< 1 h` → minutes ("40 min"); `< 48 h` → "12 h 30 min";
-otherwise working days at `hours_per_week / 5` hours per day ("6.5 workdays").
+A workday is `hours_per_week / 5` hours. Display: `< 1 h` → minutes ("40 min");
+under one workday → "6 h 30 min"; otherwise working days ("1 workday", "4.3 workdays").
 When `income_storage = device`, the web stores income only in
 `localStorage["toki.income"]` and computes in the browser.
