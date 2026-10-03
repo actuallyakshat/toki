@@ -27,6 +27,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Fire-and-forget toast. Every optimistic mutation rolls back and calls this on failure. */
 export function useToast(): Notify {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error("useToast must be used inside ToastProvider");
