@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { ArrowRight, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { MorphingModal } from "@/components/motion/morphing-modal";
 import { StatefulButton } from "@/components/motion/button";
@@ -12,28 +12,40 @@ import { Switch } from "@/components/motion/switch";
 import { TokiButton } from "@/components/shared/buttons";
 import { IconPanel, IconTrigger } from "@/components/shared/icon-picker";
 import { DEFAULT_LIST_ICON } from "@/lib/list-icon-value";
+import { formatMoney, formatTime, type Income } from "@/lib/format";
 import { setMode } from "@/lib/mode";
+import { deferSalaryOnboarding } from "@/lib/onboarding";
 import { useApp } from "./app-context";
 import { AddItemFlow, useAddFlow } from "./add-item-flow";
 import { IncomeForm } from "./income-form";
 
-/** One morphing modal for add, salary and new list. Escape and the backdrop close it. */
+/** One morphing modal for onboarding, add, salary and new list. Escape and the backdrop close it. */
 export function ModalHost() {
-  const { modal, closeModal, setListId } = useApp();
+  const { user, modal, closeModal, setListId } = useApp();
+  const notify = useToast();
   const flow = useAddFlow();
   const viewId = modal === "add" ? `add-${flow.step}` : modal;
 
-  useEffect(() => {
-    if (!modal) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeModal();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [modal, closeModal]);
-
   const close = () => {
+    // Any way out of onboarding without saving counts as "I'll do it later".
+    if (modal === "onboarding") {
+      deferSalaryOnboarding(user.id);
+      notify({
+        status: "neutral",
+        title: "Prices stay in money for now",
+        description: "Add your salary any time from the Hours switch or Settings › Hours of work.",
+      });
+    }
     closeModal();
     flow.reset();
   };
+
+  useEffect(() => {
+    if (!modal) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   return (
     <MorphingModal
@@ -42,6 +54,7 @@ export function ModalHost() {
       placement="center"
       className="max-w-md rounded-[var(--radius-card)] border-0 bg-surface"
     >
+      {modal === "onboarding" && <OnboardingView onLater={close} onSaved={closeModal} />}
       {modal === "add" && <AddItemFlow flow={flow} onClose={close} />}
       {modal === "income" && <IncomeView onClose={close} />}
       {modal === "share" && <ShareView onClose={close} />}
@@ -79,6 +92,54 @@ function IncomeView({ onClose }: { onClose: () => void }) {
           setMode("time");
           onClose();
         }}
+      />
+    </div>
+  );
+}
+
+const SAMPLES = [
+  { name: "Wireless earbuds", price_minor: 299_900 },
+  { name: "Running shoes", price_minor: 849_900 },
+  { name: "A new phone", price_minor: 6_999_900 },
+];
+
+/** First visit with no salary: shows what price-to-time does, live, and lets the person skip it. */
+function OnboardingView({ onLater, onSaved }: { onLater: () => void; onSaved: () => void }) {
+  const { user, currency } = useApp();
+  const [draft, setDraft] = useState<Income | null>(null);
+  const first = user.name.trim().split(/\s+/)[0];
+
+  return (
+    <div>
+      <ViewHeader
+        title={first ? `Welcome to Toki, ${first}` : "Welcome to Toki"}
+        hint="Toki can show every price as the hours you work to pay for it. Add your monthly in-hand salary to try it."
+        onClose={onLater}
+      />
+      <ul aria-live="polite" className="mb-5 divide-y divide-border rounded-[var(--radius-control)] bg-surface-sunk px-3">
+        {SAMPLES.map((s) => (
+          <li key={s.name} className="flex items-center gap-3 py-2.5 text-[13px]">
+            <span className="min-w-0 flex-1 truncate text-text-muted">{s.name}</span>
+            <span className="tabular-nums">{formatMoney(s.price_minor, currency)}</span>
+            <ArrowRight className="size-3.5 shrink-0 text-text-faint" aria-hidden />
+            <span className={`w-24 text-right font-medium tabular-nums ${draft ? "text-purple" : "text-text-faint"}`}>
+              {draft ? formatTime(s.price_minor, draft) : "? h"}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <IncomeForm
+        submitLabel="Show prices in hours"
+        onDraftChange={setDraft}
+        onSaved={() => {
+          setMode("time");
+          onSaved();
+        }}
+        secondaryAction={
+          <TokiButton type="button" variant="ghost" onClick={onLater} className="-mt-1 w-full">
+            I&apos;ll do it later
+          </TokiButton>
+        }
       />
     </div>
   );
