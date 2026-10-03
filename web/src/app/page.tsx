@@ -179,7 +179,7 @@ export default function Landing() {
               title="See the price the way you pay for it"
               description={
                 <p>
-                  Under an hour Toki shows minutes. Past 48 hours it shows workdays. The same headphones cost very different amounts of a month, depending on who is buying.
+                  Under an hour Toki shows minutes. From one working day up it shows workdays. The same headphones cost very different amounts of a month, depending on who is buying.
                 </p>
               }
             >

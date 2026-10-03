@@ -1,5 +1,5 @@
 import { authItem, settingsItem } from './storage';
-import type { Profile, RefreshResult, RefreshTask, User, WishList } from './types';
+import type { Profile, RefreshResult, RefreshTask, SavedItem, User, WishList } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -72,7 +72,15 @@ export const api = {
     return (await request<{ lists: WishList[] }>('/lists')).data.lists;
   },
   addItem(body: { url: string; list_id?: string; capture?: unknown; target_price_minor?: number }) {
-    return request<unknown>('/items', { body });
+    return request<SavedItem>('/items', { body });
+  },
+  /** The user's wanted items for the product behind a URL, across all lists. */
+  async lookupItems(url: string) {
+    return (await request<{ items: SavedItem[] }>(`/items/lookup?url=${encodeURIComponent(url)}`)).data.items;
+  },
+  /** Soft remove, the same as Remove on the web: adding the product again brings the item back. */
+  async removeItem(id: string) {
+    await request(`/items/${id}`, { method: 'PATCH', body: { status: 'removed' } });
   },
   async refreshTasks(limit: number) {
     return (await request<{ tasks: RefreshTask[] }>(`/extension/refresh-tasks?limit=${limit}`)).data.tasks;

@@ -136,7 +136,7 @@ export default function SettingsSectionPage() {
           )}
 
           {section.id === "hours" && (
-            <Row stack label="Salary and hours" hint="Toki divides each price by your hourly pay. Under an hour it shows minutes. Past 48 hours it shows workdays.">
+            <Row stack label="Salary and hours" hint="Toki divides each price by your hourly pay. Under an hour it shows minutes. From one working day up it shows workdays.">
               <div className="max-w-xl">
                 <IncomeForm submitLabel="Save salary" onSaved={() => notify({ status: "success", title: "Salary saved" })} />
               </div>

@@ -1,0 +1,9 @@
+/* The popup scrolls when a long form meets Chrome's 600px popup limit, without drawing a scrollbar. */
+html,
+body {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}

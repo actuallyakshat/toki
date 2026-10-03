@@ -148,6 +148,31 @@ func (s *Server) createItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, it)
 }
 
+// lookupItems returns the user's wanted items for the product behind a URL, so the extension
+// can offer Remove instead of Add. A URL that is not a product, or an unknown product, has none.
+func (s *Server) lookupItems(w http.ResponseWriter, r *http.Request) {
+	ctx, u := r.Context(), userFrom(r)
+	items := []store.Item{}
+	canonical, _, err := extract.Canonicalize(r.URL.Query().Get("url"))
+	if err != nil {
+		writeJSON(w, 200, map[string]any{"items": items})
+		return
+	}
+	prod, err := s.store.ProductByURL(ctx, canonical)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+	case err != nil:
+		internal(w, err)
+		return
+	default:
+		if items, err = s.store.WantedItemsByProduct(ctx, u.ID, prod.ID); err != nil {
+			internal(w, err)
+			return
+		}
+	}
+	writeJSON(w, 200, map[string]any{"items": items})
+}
+
 type fetchError struct{ err error }
 
 func (e *fetchError) Error() string { return e.err.Error() }

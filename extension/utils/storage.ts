@@ -1,5 +1,5 @@
 import { storage } from 'wxt/utils/storage';
-import type { User } from './types';
+import type { Profile, User, WishList } from './types';
 
 export const DEFAULT_API_ORIGIN = 'http://localhost:8080';
 export const DEFAULT_WEB_ORIGIN = 'http://localhost:3000';
@@ -26,6 +26,24 @@ export const authItem = storage.defineItem<Auth | null>('local:auth', { fallback
 export const trackingItem = storage.defineItem<Tracking>('local:tracking', {
   fallback: { enabled: false, lastRun: null },
 });
+
+/** The last lists and profile the popup loaded, shown at once while fresh ones load. Tied to one user. */
+export interface PopupCache {
+  userId: string;
+  lists: WishList[];
+  profile: Profile | null;
+}
+export const popupCacheItem = storage.defineItem<PopupCache | null>('local:popupCache', { fallback: null });
+
+/** Toki's own web app and API are never products, whatever their pages show. */
+export function isTokiUrl(url: string, settings: Settings): boolean {
+  try {
+    const { origin } = new URL(url);
+    return origin === normaliseOrigin(settings.webOrigin) || origin === normaliseOrigin(settings.apiOrigin);
+  } catch {
+    return false;
+  }
+}
 
 export function normaliseOrigin(input: string): string | null {
   try {

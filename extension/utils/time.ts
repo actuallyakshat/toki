@@ -13,9 +13,10 @@ export function timeCost(priceMinor: number, profile: Profile | null): TimeCost 
 
   const hourlyMinor = income / ((weekly * 52) / 12);
   const hours = priceMinor / hourlyMinor;
+  const workday = weekly / 5;
 
   if (hours < 1) return { kind: 'minutes', minutes: Math.max(1, Math.round(hours * 60)) };
-  if (hours < 48) {
+  if (hours < workday) {
     let whole = Math.floor(hours);
     let minutes = Math.round((hours - whole) * 60);
     if (minutes === 60) {
@@ -24,7 +25,7 @@ export function timeCost(priceMinor: number, profile: Profile | null): TimeCost 
     }
     return { kind: 'hours', hours: whole, minutes };
   }
-  const days = Math.round((hours / (weekly / 5)) * 10) / 10;
+  const days = Math.round((hours / workday) * 10) / 10;
   return { kind: 'workdays', days };
 }
 

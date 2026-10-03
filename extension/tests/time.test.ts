@@ -27,11 +27,11 @@ describe('timeCost (CONTRACT.md time conversion)', () => {
     expect(timeCost(1, profile())).toEqual({ kind: 'minutes', minutes: 1 });
   });
 
-  it('uses hours and minutes under 48 h', () => {
+  it('uses hours and minutes under one workday', () => {
     // ₹1,00,000 a month at 40 h/week: 173.33 h/month → hourly 57692.3 minor.
     const p = profile({ monthly_income_minor: 10_000_000, hours_per_week: 40 });
     expect(timeCost(57_693, p)).toEqual({ kind: 'hours', hours: 1, minutes: 0 });
-    expect(timeCost(57_692 * 12.5, p)).toEqual({ kind: 'hours', hours: 12, minutes: 30 });
+    expect(timeCost(57_692 * 6.5, p)).toEqual({ kind: 'hours', hours: 6, minutes: 30 });
   });
 
   it('rounds 59.5+ minutes up into the next hour', () => {
@@ -40,10 +40,11 @@ describe('timeCost (CONTRACT.md time conversion)', () => {
     expect(timeCost(hourly * 2.995, p)).toEqual({ kind: 'hours', hours: 3, minutes: 0 });
   });
 
-  it('uses workdays of hours_per_week / 5 from 48 h', () => {
+  it('uses workdays of hours_per_week / 5 from one workday', () => {
     const p = profile({ monthly_income_minor: 10_000_000, hours_per_week: 40 });
     const hourly = 10_000_000 / ((40 * 52) / 12);
-    expect(timeCost(hourly * 48, p)).toEqual({ kind: 'workdays', days: 6 });
+    expect(timeCost(hourly * 8, p)).toEqual({ kind: 'workdays', days: 1 });
+    expect(timeCost(hourly * 34.65, p)).toEqual({ kind: 'workdays', days: 4.3 });
     expect(timeCost(hourly * 52, p)).toEqual({ kind: 'workdays', days: 6.5 });
   });
 });

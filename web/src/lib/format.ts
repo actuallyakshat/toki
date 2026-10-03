@@ -34,10 +34,11 @@ export function workHours(priceMinor: number, income: Income): number {
 
 const trim = (n: number) => String(Math.round(n * 10) / 10);
 
-/** < 1 h -> "40 min"; < 48 h -> "12 h 30 min"; else working days "6.5 workdays". */
+/** < 1 h -> "40 min"; under one workday (hours_per_week / 5) -> "6 h 30 min"; else "4.3 workdays". */
 export function formatWork(hours: number, hoursPerWeek: number): string {
+  const workday = hoursPerWeek / 5;
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
-  if (hours < 48) {
+  if (hours < workday) {
     let h = Math.floor(hours);
     let m = Math.round((hours - h) * 60);
     if (m === 60) {
@@ -46,7 +47,8 @@ export function formatWork(hours: number, hoursPerWeek: number): string {
     }
     return m === 0 ? `${h} h` : `${h} h ${m} min`;
   }
-  return `${trim(hours / (hoursPerWeek / 5))} workdays`;
+  const days = trim(hours / workday);
+  return `${days} ${days === "1" ? "workday" : "workdays"}`;
 }
 
 export function formatTime(priceMinor: number, income: Income): string {

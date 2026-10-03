@@ -46,7 +46,9 @@ describe('timeCost', () => {
   it('uses minutes, hours and workdays', () => {
     // hourly = 150000 / (45 * 52 / 12) = 769.23 rupees
     expect(timeCost(30000, profile)).toEqual({ kind: 'minutes', minutes: 23 });
-    expect(timeCost(1000000, profile)).toEqual({ kind: 'hours', hours: 13, minutes: 0 });
+    expect(timeCost(500000, profile)).toEqual({ kind: 'hours', hours: 6, minutes: 30 });
+    // 13 h at a 9 h workday (45 h / 5)
+    expect(timeCost(1000000, profile)).toEqual({ kind: 'workdays', days: 1.4 });
     const days = timeCost(12999900, profile);
     expect(days).toEqual({ kind: 'workdays', days: 18.8 });
   });

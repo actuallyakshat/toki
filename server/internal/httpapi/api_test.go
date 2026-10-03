@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -223,6 +224,7 @@ func TestProtectedRoutesNeedASession(t *testing.T) {
 		{"GET", "/api/lists/x/items"}, {"POST", "/api/lists/x/reorder"},
 		{"POST", "/api/items"}, {"PATCH", "/api/items/x"}, {"DELETE", "/api/items/x"},
 		{"GET", "/api/items/x/history"}, {"POST", "/api/items/x/refresh"}, {"POST", "/api/extract"},
+		{"GET", "/api/items/lookup?url=x"},
 		{"GET", "/api/extension/refresh-tasks"}, {"POST", "/api/extension/refresh-results"}, {"GET", "/api/stats"},
 	}
 	anon := e.anon()
@@ -460,6 +462,39 @@ func TestCreateItemFromCapture(t *testing.T) {
 	inGifts := c.addItem(phoneURL, 2999000, map[string]any{"list_id": gifts.ID})
 	if inGifts.ListID != gifts.ID || inGifts.ID == it.ID {
 		t.Errorf("item in gifts = %+v", inGifts)
+	}
+}
+
+func TestLookupItemsByURL(t *testing.T) {
+	e := newEnv(t)
+	c := e.signup("a@example.com")
+	other := e.signup("b@example.com")
+	lookup := func(cl *client, raw string) []store.Item {
+		var out struct{ Items []store.Item }
+		cl.do("GET", "/api/items/lookup?url="+url.QueryEscape(raw), nil).want(200).into(&out)
+		return out.Items
+	}
+
+	it := c.addItem(phoneURL, 2999000, nil)
+	// Any URL form of the same product finds it.
+	if got := lookup(c, "https://amazon.in/gp/product/B09XS7JWHH?ref=x"); len(got) != 1 || got[0].ID != it.ID {
+		t.Errorf("lookup = %+v, want %s", got, it.ID)
+	}
+	// Other users do not see it, even for a product they share.
+	if got := lookup(other, phoneURL); len(got) != 0 {
+		t.Errorf("other user's lookup = %+v", got)
+	}
+	// Not a product URL, or a product nobody saved: no items, no error.
+	if got := lookup(c, "https://www.amazon.in/"); len(got) != 0 {
+		t.Errorf("home page lookup = %+v", got)
+	}
+	if got := lookup(c, "https://shop.test/products/unknown"); len(got) != 0 {
+		t.Errorf("unknown product lookup = %+v", got)
+	}
+	// Removed items are not in Toki any more.
+	c.do("PATCH", "/api/items/"+it.ID.String(), map[string]any{"status": "removed"}).want(200)
+	if got := lookup(c, phoneURL); len(got) != 0 {
+		t.Errorf("lookup after remove = %+v", got)
 	}
 }
 

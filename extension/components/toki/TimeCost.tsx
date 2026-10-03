@@ -21,7 +21,7 @@ export function TimeCost({ cost }: { cost: Cost }) {
           {...ticker}
           value={Math.round(cost.days * 10)}
           format={(v) => (v / 10).toFixed(1)}
-          suffix=" workdays"
+          suffix={cost.days === 1 ? ' workday' : ' workdays'}
           className="text-foreground"
         />
       )}

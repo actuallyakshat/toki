@@ -171,6 +171,7 @@ All under `/api`. 🔒 = requires session.
 | Method | Path | Body | Response |
 |---|---|---|---|
 | POST | `/items` 🔒 | `{url, list_id?, capture?: Capture, target_price_minor?}` | 201 Item. With `capture` → used as first price point (source `extension`). Without → server extracts. Fails → 422 `extract_failed`. Same product already in that list → 200 existing Item. |
+| GET | `/items/lookup` 🔒 | query `url` (any URL form of the product) | `{items: [Item]}` — the user's `wanted` items for that product across all lists, oldest first. Not a product URL or an unknown product → `{items: []}`. Used by the extension to offer Remove instead of Add. |
 | PATCH | `/items/{id}` 🔒 | `{target_price_minor?, alert_rule?, note?, status?, cooling_until?, list_id?}` | Item |
 | DELETE | `/items/{id}` 🔒 | — | 204 |
 | GET | `/items/{id}/history` 🔒 | query `days=90` | `{points: [PricePoint]}` ascending |
@@ -233,7 +234,7 @@ hourly_minor = monthly_income_minor / (hours_per_week × 52 / 12)
 hours        = price_minor / hourly_minor
 ```
 
-Display: `< 1 h` → minutes ("40 min"); `< 48 h` → "12 h 30 min";
-otherwise working days at `hours_per_week / 5` hours per day ("6.5 workdays").
+A workday is `hours_per_week / 5` hours. Display: `< 1 h` → minutes ("40 min");
+under one workday → "6 h 30 min"; otherwise working days ("1 workday", "4.3 workdays").
 When `income_storage = device`, the web stores income only in
 `localStorage["toki.income"]` and computes in the browser.

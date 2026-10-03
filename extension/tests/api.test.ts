@@ -109,6 +109,21 @@ describe('api helpers unwrap responses', () => {
     await api.refreshResults([{ product_id: 'p', error: 'x' }]);
     expect(JSON.parse(call(2)[1].body ?? '')).toEqual({ results: [{ product_id: 'p', error: 'x' }] });
   });
+
+  it('looks up saved items by URL and soft-removes them', async () => {
+    const item = { id: 'i1', list_id: 'l1', status: 'wanted' };
+    fetchMock.mockResolvedValueOnce(respond(200, { items: [item] }));
+    expect(await api.lookupItems('https://www.amazon.in/dp/B0CHX1W1XY?ref=a&b=c')).toEqual([item]);
+    expect(call(0)[0]).toBe(
+      'https://api.toki.test/api/items/lookup?url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CHX1W1XY%3Fref%3Da%26b%3Dc',
+    );
+
+    fetchMock.mockResolvedValueOnce(respond(200, { ...item, status: 'removed' }));
+    await api.removeItem('i1');
+    expect(call(1)[0]).toBe('https://api.toki.test/api/items/i1');
+    expect(call(1)[1].method).toBe('PATCH');
+    expect(JSON.parse(call(1)[1].body ?? '')).toEqual({ status: 'removed' });
+  });
 });
 
 describe('normaliseOrigin', () => {

@@ -7,12 +7,23 @@ export interface TabCapture {
   result: ExtractResult | null;
 }
 
+export interface WebTab {
+  id: number;
+  url: string;
+  title: string;
+}
+
 /** Returns null when the active tab is not a web page (chrome://, new tab, and so on). */
-export async function captureActiveTab(): Promise<TabCapture | null> {
+export async function activeWebTab(): Promise<WebTab | null> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) return null;
+  return { id: tab.id, url: tab.url, title: tab.title ?? '' };
+}
+
+/** Reads the product on the tab now. The page can still be loading its price, so this may differ from a prefetch. */
+export async function captureTab(tab: WebTab): Promise<TabCapture> {
   const target = { tabId: tab.id };
-  const base = { url: tab.url, title: tab.title ?? '' };
+  const base = { url: tab.url, title: tab.title };
 
   try {
     let myx: unknown;

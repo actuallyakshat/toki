@@ -1,7 +1,8 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { api } from '@/utils/api';
-import { authItem, trackingItem } from '@/utils/storage';
-import { isTrackingActive } from '@/utils/tracking';
+import { clearCachedPage, writeCachedPage } from '@/utils/page-cache';
+import { authItem, isTokiUrl, settingsItem, trackingItem } from '@/utils/storage';
+import { isTrackingActive, TRACKING_ORIGINS } from '@/utils/tracking';
 import { runRefresh, type RefreshDeps } from '@/utils/refresh';
 import type { ExtractResult } from '@/utils/extract';
 
@@ -59,6 +60,35 @@ async function refreshPrices(): Promise<void> {
   }
 }
 
+const PREFETCH_ID = 'toki-prefetch';
+
+/**
+ * The prefetch content script reads product pages as they load. It uses the same host access as
+ * price tracking, so it runs exactly while tracking is active. Registrations persist across
+ * sessions and a duplicate id throws, so this checks what is registered first.
+ */
+async function syncPrefetch(): Promise<void> {
+  const want = await isTrackingActive();
+  const registered = await chrome.scripting.getRegisteredContentScripts({ ids: [PREFETCH_ID] });
+  if (want && registered.length === 0) {
+    await chrome.scripting.registerContentScripts([
+      {
+        id: PREFETCH_ID,
+        js: ['content-scripts/prefetch.js'],
+        matches: TRACKING_ORIGINS,
+        runAt: 'document_idle',
+        persistAcrossSessions: true,
+      },
+    ]);
+  } else if (!want && registered.length > 0) {
+    await chrome.scripting.unregisterContentScripts({ ids: [PREFETCH_ID] });
+  }
+}
+
+function syncPrefetchSafely(): void {
+  syncPrefetch().catch((error) => console.warn('Toki could not update page prefetch:', error));
+}
+
 function scheduleSoon(): void {
   chrome.alarms.create(REFRESH_SOON_ALARM, { delayInMinutes: 1 });
 }
@@ -72,12 +102,25 @@ export default defineBackground(() => {
   chrome.runtime.onInstalled.addListener(scheduleSoon);
   chrome.runtime.onStartup.addListener(scheduleSoon);
 
+  syncPrefetchSafely();
+  trackingItem.watch(syncPrefetchSafely);
+  chrome.permissions.onAdded.addListener(syncPrefetchSafely);
+  chrome.permissions.onRemoved.addListener(syncPrefetchSafely);
+  chrome.tabs.onRemoved.addListener((tabId) => void clearCachedPage(tabId));
+
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === REFRESH_ALARM || alarm.name === REFRESH_SOON_ALARM) void refreshPrices();
   });
 
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, sender) => {
     if (message?.type === 'refresh-soon') scheduleSoon();
+    const tabId = sender.tab?.id;
+    if (message?.type === 'page-captured' && tabId !== undefined) {
+      void settingsItem.getValue().then((settings) => {
+        if (isTokiUrl(message.url, settings)) return;
+        return writeCachedPage(tabId, { url: message.url, title: message.title, result: message.result });
+      });
+    }
     if (message?.type === 'item-added') {
       void chrome.action.setBadgeBackgroundColor({ color: '#2e8540' });
       void chrome.action.setBadgeText({ text: '✓' });
