@@ -30,3 +30,24 @@ cd ../extension && pnpm install && pnpm build
 ```
 
 Load `extension/.output/chrome-mv3` in `chrome://extensions` with Developer mode on ("Load unpacked").
+
+## Tests
+
+Run every suite before you push:
+
+```sh
+./test.sh                  # server + web + extension
+./test.sh server           # or pick suites: server, web, extension
+```
+
+| Suite | What it covers | Run it alone |
+|---|---|---|
+| `server` | Unit tests, plus store, price-check and HTTP API tests against a real Postgres | `cd server && go test ./...` (needs `TEST_DATABASE_URL`) |
+| `web` | Typecheck, lint, Vitest tests for `src/lib` (formatting, API client, cache hooks, auth gate) | `cd web && pnpm test` |
+| `extension` | Typecheck, Vitest tests for extraction, refresh, API client, tracking | `cd extension && pnpm test` |
+
+The database tests use a separate `toki_test` database. `./test.sh` creates it in the
+docker compose Postgres. Each test runs in its own throwaway schema, so tests never touch
+your dev data. Without `TEST_DATABASE_URL`, `go test` skips the database tests (CI fails
+instead). GitHub Actions runs all three suites on every push to `main` and every pull request
+(`.github/workflows/test.yml`).
