@@ -99,7 +99,7 @@ func TestCreateUserMakesProfileAndDefaultList(t *testing.T) {
 		t.Fatalf("got %d lists, want 1", len(lists))
 	}
 	l := lists[0]
-	if l.Name != "Wishlist" || l.Emoji != "✨" || l.Visibility != "private" || len(l.ShareSlug) != 8 || l.Currency != "INR" {
+	if l.Name != "Wishlist" || l.Emoji != "i:shopping-bag" || l.Visibility != "private" || len(l.ShareSlug) != 8 || l.Currency != "INR" {
 		t.Errorf("default list = %+v", l)
 	}
 	if id := defaultList(t, st, u); id != l.ID {

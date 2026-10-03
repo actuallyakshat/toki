@@ -124,7 +124,7 @@ Middleware accepts either. A signup creates a default list named "Wishlist".
 }
 
 // List
-{ "id": "…", "name": "Wishlist", "emoji": "✨", "visibility": "private",  // private | link
+{ "id": "…", "name": "Wishlist", "emoji": "i:shopping-bag", "visibility": "private",  // private | link
   "share_slug": "k3j9x2",  "item_count": 8, "total_minor": 34500000, "currency": "INR", "created_at": "…" }
 
 // Capture (what the extension or the server extractor produces from a product page)

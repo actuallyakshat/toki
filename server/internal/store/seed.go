@@ -98,7 +98,7 @@ func (s *Store) Seed(ctx context.Context) error {
 			return err
 		}
 		listIDs := [2]any{newID(), newID()}
-		if _, err := tx.Exec(ctx, `INSERT INTO lists (id, user_id, name, emoji, share_slug, created_at) VALUES ($1,$2,'Wishlist','✨',$3, now() - interval '100 days')`,
+		if _, err := tx.Exec(ctx, `INSERT INTO lists (id, user_id, name, emoji, share_slug, created_at) VALUES ($1,$2,'Wishlist','i:shopping-bag',$3, now() - interval '100 days')`,
 			listIDs[0], userID, newSlug()); err != nil {
 			return err
 		}
