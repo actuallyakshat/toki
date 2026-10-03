@@ -57,6 +57,7 @@ func New(cfg config.Config, st *store.Store, check *pricecheck.Service, fetch *e
 			r.Post("/lists/{id}/reorder", s.reorder)
 
 			r.Post("/items", s.createItem)
+			r.Get("/items/lookup", s.lookupItems)
 			r.Patch("/items/{id}", s.patchItem)
 			r.Delete("/items/{id}", s.deleteItem)
 			r.Get("/items/{id}/history", s.history)

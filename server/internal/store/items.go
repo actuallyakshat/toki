@@ -68,6 +68,12 @@ func (s *Store) ItemByProduct(ctx context.Context, listID, productID uuid.UUID) 
 	return scanItem(s.Pool.QueryRow(ctx, itemSelect+`WHERE i.list_id=$1 AND i.product_id=$2`, listID, productID))
 }
 
+// WantedItemsByProduct returns the user's wanted items for a product, across all their lists.
+func (s *Store) WantedItemsByProduct(ctx context.Context, userID, productID uuid.UUID) ([]Item, error) {
+	return s.queryItems(ctx, itemSelect+`WHERE i.user_id=$1 AND i.product_id=$2 AND i.status='wanted'
+		ORDER BY i.created_at, i.id`, userID, productID)
+}
+
 type NewItem struct {
 	UserID, ListID, ProductID uuid.UUID
 	AddedPriceMinor           int64
