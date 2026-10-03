@@ -88,7 +88,22 @@ export function useReorder(listId: string | undefined) {
   return mutation;
 }
 
-/** Instant edit of target, alert rule, note, status and cooling-off. Rolls back with an error toast. */
+/**
+ * Moves an edited item between the cached buckets it now does or does not belong to
+ * (wanted / bought / removed, per list), so a status change or a move shows at once.
+ */
+function placeItem(qc: QueryClient, snapshot: ItemsSnapshot, next: Item) {
+  for (const [key, items] of snapshot) {
+    if (!items) continue;
+    const [, listId, status] = key as ReturnType<typeof itemsKey>;
+    const belongs = listId === next.list_id && (status === "all" || status === next.status);
+    const others = items.filter((i) => i.id !== next.id);
+    if (belongs) qc.setQueryData(key, [...others, next].sort((a, b) => a.position - b.position));
+    else if (others.length !== items.length) qc.setQueryData(key, others);
+  }
+}
+
+/** Instant edit of target, alert rule, note, status, list and cooling-off. Rolls back with an error toast. */
 export function useUpdateItem() {
   const qc = useQueryClient();
   const notify = useToast();
@@ -96,25 +111,26 @@ export function useUpdateItem() {
     mutationFn: ({ id, patch }: { id: string; patch: ItemPatch }) => api.updateItem(id, patch),
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey: ["items"] });
-      const moving = patch.list_id !== undefined;
-      // A status change or a move leaves the current bucket; the settled refetch puts it right.
-      const leaves = Boolean(patch.status && patch.status !== "wanted") || moving;
-      const snapshot = mapItemCaches(qc, (items) =>
-        leaves
-          ? items.filter((i) => i.id !== id)
-          : items.map((i) => (i.id === id ? ({ ...i, ...patch }) as Item : i)),
-      );
+      const snapshot = snapshotItems(qc);
+      const current = snapshot.flatMap(([, items]) => items ?? []).find((i) => i.id === id);
+      if (!current) return { snapshot };
+      const next = { ...current, ...patch } as Item;
+      if (patch.status === "bought") next.bought_at = new Date().toISOString();
+      else if (patch.status) next.bought_at = null;
+      placeItem(qc, snapshot, next);
+      // Sidebar badges count wanted items only.
+      if (current.status !== next.status || current.list_id !== next.list_id) {
+        const price = current.product.current_price_minor;
+        if (current.status === "wanted") bumpListCount(qc, current.list_id, -1, -price);
+        if (next.status === "wanted") bumpListCount(qc, next.list_id, 1, price);
+      }
       return { snapshot };
     },
     onError: (e, variables, ctx) => {
       restoreItems(qc, ctx?.snapshot);
       failureToast(notify, "Toki could not save that change", e, () => mutation.mutate(variables));
     },
-    onSuccess: (item, { patch }) => {
-      if (!patch.status && patch.list_id === undefined) {
-        mapItemCaches(qc, (items) => items.map((i) => (i.id === item.id ? item : i)));
-      }
-    },
+    onSuccess: (item) => placeItem(qc, snapshotItems(qc), item),
     onSettled: (_d, _e, { patch }) => {
       qc.invalidateQueries({ queryKey: listsKey });
       qc.invalidateQueries({ queryKey: statsKey });

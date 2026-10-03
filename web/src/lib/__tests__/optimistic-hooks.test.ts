@@ -138,6 +138,58 @@ describe("useUpdateItem", () => {
     await act(async () => pending.resolve(item("a", { status: "bought" })));
   });
 
+  it("moves a bought item back to the wishlist at once", async () => {
+    qc.setQueryData(itemsKey("l1", "bought"), [item("b", { status: "bought", position: 1, bought_at: "2026-02-01T00:00:00.000Z" })]);
+    const pending = deferred<Item>();
+    mocked.updateItem.mockReturnValue(pending.promise);
+    const { result } = render(useUpdateItem);
+
+    act(() => result.current.mutate({ id: "b", patch: { status: "wanted" } }));
+    await waitFor(() => expect(items()!.map((i) => i.id)).toEqual(["a", "b"]));
+    expect(qc.getQueryData<Item[]>(itemsKey("l1", "bought"))).toEqual([]);
+    expect(items()![1]).toMatchObject({ status: "wanted", bought_at: null });
+    expect(lists()![0]).toMatchObject({ item_count: 2, total_minor: 2000 });
+    await act(async () => pending.resolve(item("b", { position: 1 })));
+  });
+
+  it("shows a newly bought item on the bought page at once", async () => {
+    qc.setQueryData(itemsKey("l1", "bought"), []);
+    const pending = deferred<Item>();
+    mocked.updateItem.mockReturnValue(pending.promise);
+    const { result } = render(useUpdateItem);
+
+    act(() => result.current.mutate({ id: "a", patch: { status: "bought" } }));
+    await waitFor(() => expect(qc.getQueryData<Item[]>(itemsKey("l1", "bought"))).toHaveLength(1));
+    expect(qc.getQueryData<Item[]>(itemsKey("l1", "bought"))![0].bought_at).not.toBeNull();
+    expect(lists()![0]).toMatchObject({ item_count: 0, total_minor: 0 });
+    await act(async () => pending.resolve(item("a", { status: "bought" })));
+  });
+
+  it("moves an item to another list at once", async () => {
+    qc.setQueryData(listsKey, [list("l1", { item_count: 1, total_minor: 1000 }), list("l2")]);
+    qc.setQueryData(itemsKey("l2"), []);
+    const pending = deferred<Item>();
+    mocked.updateItem.mockReturnValue(pending.promise);
+    const { result } = render(useUpdateItem);
+
+    act(() => result.current.mutate({ id: "a", patch: { list_id: "l2" } }));
+    await waitFor(() => expect(items("l2")!.map((i) => i.id)).toEqual(["a"]));
+    expect(items()).toEqual([]);
+    expect(lists()!.map((l) => l.item_count)).toEqual([0, 1]);
+    await act(async () => pending.resolve(item("a", { list_id: "l2" })));
+  });
+
+  it("puts a bought item back on the bought page if returning it fails", async () => {
+    qc.setQueryData(itemsKey("l1", "bought"), [item("b", { status: "bought" })]);
+    mocked.updateItem.mockRejectedValueOnce(failure);
+    const { result } = render(useUpdateItem);
+
+    act(() => result.current.mutate({ id: "b", patch: { status: "wanted" } }));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(items()!.map((i) => i.id)).toEqual(["a"]);
+    expect(qc.getQueryData<Item[]>(itemsKey("l1", "bought"))!.map((i) => i.id)).toEqual(["b"]);
+  });
+
   it("restores the item and toasts on failure", async () => {
     mocked.updateItem.mockRejectedValueOnce(failure);
     const { result } = render(useUpdateItem);
