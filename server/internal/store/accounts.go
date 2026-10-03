@@ -19,7 +19,7 @@ func (s *Store) CreateUser(ctx context.Context, email, name, passwordHash string
 		if _, err := tx.Exec(ctx, `INSERT INTO profiles (user_id) VALUES ($1)`, u.ID); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO lists (id, user_id, name, emoji, share_slug) VALUES ($1,$2,'Wishlist','✨',$3)`,
+		_, err := tx.Exec(ctx, `INSERT INTO lists (id, user_id, name, emoji, share_slug) VALUES ($1,$2,'Wishlist','i:shopping-bag',$3)`,
 			newID(), u.ID, newSlug())
 		return err
 	})
