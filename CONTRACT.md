@@ -4,7 +4,7 @@ Toki (時, "time") is an open-source wishlist with live price tracking, price-dr
 emails, a Chrome extension for one-click capture, and a toggle that shows every
 price as hours of work.
 
-This file is the single source of truth for all three apps. Do not change a
+This file is the single source of truth for every app (web, extension, mobile). Do not change a
 shape here without updating every app that uses it.
 
 ## Repository layout
@@ -19,10 +19,12 @@ toki/
   server/                Go API + price-check worker (one binary)
   web/                   Next.js App Router website
   extension/             WXT (Manifest V3) Chrome extension
+  mobile/                Expo (React Native) app for iOS and Android
 ```
 
 Each app is independent: its own `go.mod` / `package.json` / lockfile. There is
-no root workspace yet. Use `pnpm` for JS apps.
+no root workspace yet. Use `pnpm` for the web and extension; `mobile/` uses npm,
+as Expo's tooling expects.
 
 ## Ports and environment
 
@@ -69,6 +71,8 @@ random 32-byte token, stored as SHA-256 hash). Two ways to send a session:
    The extension stores the token in `chrome.storage.local`. The extension's
    manifest has `host_permissions` for the API origin, so extension pages and
    the service worker can call the API without CORS.
+3. **Mobile**: the same bearer token as the extension, kept in the device keychain /
+   keystore. Native requests send no `Origin`, so CORS does not apply.
 
 Middleware accepts either. A signup creates a default list named "Wishlist".
 
