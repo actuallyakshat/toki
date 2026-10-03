@@ -21,6 +21,13 @@ export interface WishList {
   item_count: number;
 }
 
+/** The fields of a saved Item the extension uses. */
+export interface SavedItem {
+  id: string;
+  list_id: string;
+  status: 'wanted' | 'bought' | 'removed';
+}
+
 export type Retailer = 'amazon_in' | 'flipkart' | 'myntra' | 'shopify' | 'generic';
 
 export interface Capture {

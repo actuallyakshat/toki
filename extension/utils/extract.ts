@@ -6,6 +6,8 @@ import type { Capture, Retailer } from './types';
 export interface ExtractHints {
   /** `window.__myx.pdpData` from the Myntra page, read from the MAIN world. */
   myx?: unknown;
+  /** The URL is a saved product (price refresh), so listing detection is off and the best guess is kept. */
+  knownProduct?: boolean;
 }
 
 export interface ExtractResult {
@@ -14,6 +16,11 @@ export interface ExtractResult {
   confident: boolean;
   /** Which layer supplied the price, for debugging. */
   source: Layer | null;
+  /**
+   * True when the page shows many products (a home, search or category page) rather than one.
+   * The capture is then null: a guessed price or the site's own title would be wrong.
+   */
+  listing: boolean;
 }
 
 type Layer = 'json-ld' | 'meta' | 'microdata' | 'adapter' | 'generic';
@@ -25,7 +32,12 @@ interface Fields {
   currency?: string;
   original?: number;
   inStock?: boolean;
+  /** The layer saw signs of a page with many products. */
+  listing?: boolean;
 }
+
+/** Distinct rupee amounts on a page without product data, from which it counts as a listing. */
+const LISTING_PRICE_COUNT = 6;
 
 export function retailerFor(url: string, doc?: Document): Retailer {
   let host = '';
@@ -41,20 +53,28 @@ export function retailerFor(url: string, doc?: Document): Retailer {
   return 'generic';
 }
 
+const LISTING: ExtractResult = { capture: null, confident: false, source: null, listing: true };
+
 export function extractCapture(doc: Document, url: string, hints: ExtractHints = {}): ExtractResult {
   const retailer = retailerFor(url, doc);
+  // Myntra's page data exists only on product pages, so it marks one on its own.
+  if (!hints.myx && !hints.knownProduct && !isRetailerProductPage(doc, url, retailer)) return LISTING;
+
   const layers: [Layer, () => Fields][] = [
-    ['json-ld', () => fromJsonLd(doc)],
+    ['json-ld', () => fromJsonLd(doc, hints.knownProduct === true)],
     ['meta', () => fromMeta(doc)],
     ['microdata', () => fromMicrodata(doc)],
     ['adapter', () => fromAdapter(doc, retailer, hints)],
-    ['generic', () => fromGeneric(doc)],
+    // Known stores' listings are told apart by URL above; their product pages show many prices too.
+    ['generic', () => fromGeneric(doc, retailer === 'generic' || retailer === 'shopify')],
   ];
 
   const merged: Fields = {};
   let source: Layer | null = null;
+  let listing = false;
   for (const [layer, read] of layers) {
     const fields = safely(read);
+    listing ||= fields.listing === true;
     if (merged.price === undefined && fields.price !== undefined) {
       merged.price = fields.price;
       merged.currency = fields.currency;
@@ -66,8 +86,12 @@ export function extractCapture(doc: Document, url: string, hints: ExtractHints =
     merged.inStock ??= fields.inStock;
   }
 
+  // Product data found by a confident layer wins: real product pages also show many prices (offers, EMI, carousels).
+  const confident = source !== null && source !== 'generic';
+  if (!confident && listing && !hints.knownProduct) return LISTING;
+
   const title = clean(merged.title) || clean(doc.title);
-  if (!title && merged.price === undefined) return { capture: null, confident: false, source };
+  if (!title && merged.price === undefined) return { capture: null, confident: false, source, listing: false };
 
   const capture: Capture = {
     source_url: url,
@@ -82,7 +106,7 @@ export function extractCapture(doc: Document, url: string, hints: ExtractHints =
     in_stock: merged.inStock ?? true,
     retailer,
   };
-  return { capture, confident: source !== null && source !== 'generic', source };
+  return { capture, confident, source, listing: false };
 }
 
 function safely(read: () => Fields): Fields {
@@ -144,17 +168,22 @@ function hasType(node: Json, type: string): boolean {
   return asArray(node['@type'] as string | string[]).some((t) => String(t).endsWith(type));
 }
 
-function collectNodes(value: unknown, out: Json[], depth = 0): void {
+function collectNodes(value: unknown, out: Json[], depth = 0, variants?: Set<Json>, variant = false): void {
   if (depth > 6 || !value || typeof value !== 'object') return;
   if (Array.isArray(value)) {
-    for (const entry of value) collectNodes(entry, out, depth + 1);
+    for (const entry of value) collectNodes(entry, out, depth + 1, variants, variant);
     return;
   }
   const node = value as Json;
   out.push(node);
-  collectNodes(node['@graph'], out, depth + 1);
-  collectNodes(node.mainEntity, out, depth + 1);
-  collectNodes(node.hasVariant, out, depth + 1);
+  if (variant) variants?.add(node);
+  collectNodes(node['@graph'], out, depth + 1, variants);
+  collectNodes(node.mainEntity, out, depth + 1, variants);
+  collectNodes(node.hasVariant, out, depth + 1, variants, true);
+  // ItemList entries (category and search pages): { item: Product } or the Product itself.
+  for (const entry of asArray(node.itemListElement as Json | Json[])) {
+    collectNodes(entry && typeof entry === 'object' && 'item' in entry ? entry.item : entry, out, depth + 1, variants);
+  }
 }
 
 function availability(value: unknown): boolean | undefined {
@@ -192,15 +221,24 @@ function offerFields(offer: Json): Fields | null {
   };
 }
 
-function fromJsonLd(doc: Document): Fields {
+function fromJsonLd(doc: Document, knownProduct: boolean): Fields {
   const nodes: Json[] = [];
+  const variants = new Set<Json>();
   for (const script of Array.from(doc.querySelectorAll('script[type="application/ld+json"]'))) {
     try {
-      collectNodes(JSON.parse(script.textContent ?? ''), nodes);
+      collectNodes(JSON.parse(script.textContent ?? ''), nodes, 0, variants);
     } catch {
       // Malformed JSON-LD is common; ignore this block.
     }
   }
+
+  // Several different products (not variants of one) describe a category or search page.
+  const names = new Set(
+    nodes
+      .filter((n) => hasType(n, 'Product') && !variants.has(n))
+      .map((n) => clean(String(n.name ?? n.url ?? ''))),
+  );
+  if (names.size >= 3 && !knownProduct) return { listing: true };
 
   for (const product of nodes.filter((n) => hasType(n, 'Product') || hasType(n, 'ProductGroup'))) {
     const offers: Json[] = [];
@@ -268,6 +306,53 @@ function fromMicrodata(doc: Document): Fields {
 }
 
 /* ---------------------------------------------------------------- retailers */
+
+/**
+ * A cheap check, run on every page load before a full extract, that the page may be one product:
+ * a known store, or product data in JSON-LD, meta tags or microdata.
+ */
+export function mayBeProductPage(doc: Document, url: string): boolean {
+  if (retailerFor(url) !== 'generic') return true;
+  if (
+    doc.querySelector(
+      'meta[property="og:type"][content*="product" i], meta[property="product:price:amount"], meta[property="og:price:amount"], [itemprop="price"]',
+    )
+  ) {
+    return true;
+  }
+  return Array.from(doc.querySelectorAll('script[type="application/ld+json"]')).some((s) =>
+    /"Product(?:Group)?"/.test(s.textContent ?? ''),
+  );
+}
+
+/** Amazon product URLs carry an ASIN; the server accepts nothing else for Amazon (see extract/canonical.go). */
+const AMAZON_PRODUCT_PATH = /\/(?:dp|gp\/product|gp\/aw\/d|product)\/[A-Za-z0-9]{10}(?:[/?]|$)/;
+
+function pathOf(url: string): URL | null {
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a known store's page is a single product. Their home, search and category pages
+ * reuse the product page's price markup, so the adapters only run on product pages.
+ */
+export function isRetailerProductPage(doc: Document, url: string, retailer: Retailer): boolean {
+  const parsed = pathOf(url);
+  switch (retailer) {
+    case 'amazon_in':
+      return AMAZON_PRODUCT_PATH.test(`${parsed?.pathname ?? ''}/`) || !!doc.querySelector('#productTitle');
+    case 'flipkart':
+      return /\/p\/itm/i.test(parsed?.pathname ?? '') || !!parsed?.searchParams.has('pid');
+    case 'myntra':
+      return /\/(?:\d{4,}|buy)\/?$/.test(parsed?.pathname ?? '') || !!doc.querySelector('.pdp-price');
+    default:
+      return true;
+  }
+}
 
 function fromAdapter(doc: Document, retailer: Retailer, hints: ExtractHints): Fields {
   switch (retailer) {
@@ -416,8 +501,9 @@ function fromMyntra(doc: Document, hints: ExtractHints): Fields {
 /* ------------------------------------------------------------------ generic */
 
 const RUPEE_PRICE = /(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d{1,2})?)/i;
+const RUPEE_PRICES = new RegExp(RUPEE_PRICE.source, 'gi');
 
-function fromGeneric(doc: Document): Fields {
+function fromGeneric(doc: Document, countPrices: boolean): Fields {
   let largest: { src: string; area: number } | null = null;
   for (const img of Array.from(doc.querySelectorAll('img'))) {
     const src = img.getAttribute('src') ?? img.getAttribute('data-src');
@@ -430,12 +516,15 @@ function fromGeneric(doc: Document): Fields {
 
   const body = doc.body?.cloneNode(true) as HTMLElement | undefined;
   body?.querySelectorAll('script, style, noscript, template').forEach((el) => el.remove());
-  const match = clean(body?.textContent).match(RUPEE_PRICE);
+  const text = clean(body?.textContent);
+  const match = text.match(RUPEE_PRICE);
+  const prices = countPrices ? new Set(Array.from(text.matchAll(RUPEE_PRICES), (m) => (m[1] ?? '').replace(/,/g, ''))) : null;
 
   return {
     title: clean(doc.title) || textOf(doc, ['h1']),
     image: largest?.src,
     price: match ? (parsePriceMinor(match[1]) ?? undefined) : undefined,
     currency: match ? 'INR' : undefined,
+    listing: (prices?.size ?? 0) >= LISTING_PRICE_COUNT,
   };
 }

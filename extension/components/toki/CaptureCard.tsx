@@ -1,14 +1,15 @@
-import { Check, ImageOff } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Check, ImageOff, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActionSwapButton, type ActionSwapItem } from '@/components/motion/action-swap';
 import { Input } from '@/components/motion/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/motion/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/motion/select';
+import { ListIcon } from '@/components/toki/ListIcon';
 import { TimeCost } from '@/components/toki/TimeCost';
 import { api, ApiError } from '@/utils/api';
 import { currencySymbol, formatAmountInput, parsePriceMinor } from '@/utils/money';
 import { timeCost } from '@/utils/time';
 import type { TabCapture } from '@/utils/page-capture';
-import type { Capture, Profile, WishList } from '@/utils/types';
+import type { Capture, Profile, SavedItem, WishList } from '@/utils/types';
 
 const RETAILER_NAMES: Record<string, string> = {
   amazon_in: 'Amazon India',
@@ -18,18 +19,30 @@ const RETAILER_NAMES: Record<string, string> = {
   generic: 'Online store',
 };
 
-type Phase = 'ready' | 'adding' | 'added' | 'exists';
+/** A short confirmation shown on the button before it settles on its next action. */
+type Flash = 'added' | 'exists' | 'removed';
+type Phase = 'checking' | 'ready' | 'adding' | 'saved' | 'removing' | Flash;
+
+const FLASH_MS = 1_600;
 
 interface Props {
   tab: TabCapture;
   lists: WishList[];
   profile: Profile | null;
   webOrigin: string;
+  /** The user's items for this product; undefined while Toki checks. */
+  saved: SavedItem[] | undefined;
+  /**
+   * The popup's own read of the page finished. Before that the card may show the copy read as the
+   * page loaded, which on stores that change pages without a reload can be the previous product.
+   */
+  pageRead: boolean;
+  onSavedChange: (items: SavedItem[]) => void;
 }
 
 const fieldShape = { field: 'rounded-[var(--radius-control)]' };
 
-export function CaptureCard({ tab, lists, profile, webOrigin }: Props) {
+export function CaptureCard({ tab, lists, profile, webOrigin, saved, pageRead, onSavedChange }: Props) {
   const found = tab.result?.capture ?? null;
   const hasPrice = (found?.price_minor ?? 0) > 0;
   const hostname = useMemo(() => new URL(tab.url).hostname.replace(/^www\./, ''), [tab.url]);
@@ -38,24 +51,70 @@ export function CaptureCard({ tab, lists, profile, webOrigin }: Props) {
   const [price, setPrice] = useState(hasPrice ? formatAmountInput(found!.price_minor) : '');
   const [target, setTarget] = useState('');
   const [listId, setListId] = useState(lists[0]?.id ?? '');
-  const [phase, setPhase] = useState<Phase>('ready');
+  const [busy, setBusy] = useState<'adding' | 'removing' | Flash | null>(null);
   const [error, setError] = useState('');
+
+  // The popup can show the page as it was read on load, then a fresh read. Fields the user
+  // has not touched follow the fresh read.
+  const edited = useRef({ title: false, price: false });
+  useEffect(() => {
+    if (!edited.current.title) setTitle(found?.title || tab.title);
+    if (!edited.current.price) setPrice(hasPrice ? formatAmountInput(found!.price_minor) : '');
+  }, [found?.title, found?.price_minor, hasPrice, tab.title]);
+
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
+  function flash(next: Flash) {
+    setBusy(next);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setBusy(null), FLASH_MS);
+  }
+
+  const savedListId = saved?.[0]?.list_id;
+  const isSaved = savedListId !== undefined;
+  const phase: Phase = busy ?? (saved === undefined || !pageRead ? 'checking' : isSaved ? 'saved' : 'ready');
+  // A saved product shows the list it is in.
+  const shownListId = savedListId && lists.some((l) => l.id === savedListId) ? savedListId : listId;
+  const shownList = lists.find((l) => l.id === shownListId);
+  const listName = shownList?.name ?? 'Wishlist';
+  // Target and list apply only to adding.
+  const locked = isSaved || busy !== null;
 
   const currency = found?.currency ?? 'INR';
   const priceMinor = parsePriceMinor(price);
   const cost = currency === 'INR' && priceMinor ? timeCost(priceMinor, profile) : null;
-  const listName = lists.find((l) => l.id === listId)?.name ?? 'Wishlist';
   const guessed = hasPrice && tab.result && !tab.result.confident;
 
   const items: ActionSwapItem[] = [
+    { id: 'checking', label: 'Checking' },
     { id: 'ready', label: 'Add to Toki' },
     { id: 'adding', label: 'Adding' },
     { id: 'added', label: `Added to ${listName}`, icon: <Check strokeWidth={2.5} /> },
     { id: 'exists', label: `Already in ${listName}`, icon: <Check strokeWidth={2.5} /> },
+    { id: 'saved', label: 'Remove from Toki', icon: <Trash2 strokeWidth={2.25} /> },
+    { id: 'removing', label: 'Removing' },
+    { id: 'removed', label: 'Removed from Toki', icon: <Check strokeWidth={2.5} /> },
   ];
 
+  function press() {
+    if (phase === 'ready') void add();
+    else if (phase === 'saved') void remove();
+  }
+
+  async function remove() {
+    setError('');
+    setBusy('removing');
+    try {
+      await Promise.all((saved ?? []).map((item) => api.removeItem(item.id)));
+      onSavedChange([]);
+      flash('removed');
+    } catch (e) {
+      setBusy(null);
+      setError(e instanceof ApiError ? e.message : 'Toki could not remove this product. Try again.');
+    }
+  }
+
   async function add() {
-    if (phase !== 'ready') return;
     if (!priceMinor) {
       setError('Enter the price to add this product.');
       return;
@@ -78,40 +137,45 @@ export function CaptureCard({ tab, lists, profile, webOrigin }: Props) {
     };
 
     setError('');
-    setPhase('adding');
+    setBusy('adding');
     try {
-      const { status } = await api.addItem({
+      const { data } = await api.addItem({
         url: tab.url,
         list_id: listId || undefined,
         capture,
         target_price_minor: targetMinor ?? undefined,
       });
-      setPhase(status === 200 ? 'exists' : 'added');
-      if (status !== 200) void chrome.runtime.sendMessage({ type: 'item-added' });
+      // 200 is an existing item: a removed one comes back as wanted, a bought one stays bought.
+      if (data.status === 'wanted') {
+        onSavedChange([data]);
+        flash('added');
+        void chrome.runtime.sendMessage({ type: 'item-added' });
+      } else {
+        flash('exists');
+      }
     } catch (e) {
-      setPhase('ready');
+      setBusy(null);
       setError(e instanceof ApiError ? e.message : 'Toki could not add this product. Try again.');
     }
   }
 
-  const done = phase === 'added' || phase === 'exists';
-
   return (
-    <section className="rounded-[var(--radius-card)] bg-card p-2.5 shadow-[var(--shadow-card)]">
-      <div className="relative flex h-[168px] items-center justify-center overflow-hidden rounded-[var(--radius-image)] bg-muted">
+    <section className="flex flex-col gap-3">
+      {/* No frame around the image: multiply blends the store's white backdrop into the popup. */}
+      <div className="relative flex h-[160px] items-center justify-center overflow-hidden">
         {found?.image_url ? (
           <img
             src={found.image_url}
             alt=""
             referrerPolicy="no-referrer"
-            className="h-full w-full object-contain p-2 mix-blend-multiply dark:mix-blend-normal"
+            className="h-full w-full object-contain mix-blend-multiply dark:mix-blend-normal"
           />
         ) : (
           <ImageOff className="size-6 text-muted-foreground" aria-hidden />
         )}
       </div>
 
-      <div className="flex flex-col gap-3 px-1.5 pb-1.5 pt-3">
+      <div className="flex flex-col gap-3">
         <p className="m-0 text-[12px] text-muted-foreground">{found ? RETAILER_NAMES[found.retailer] : hostname}</p>
 
         {!hasPrice && (
@@ -128,7 +192,10 @@ export function CaptureCard({ tab, lists, profile, webOrigin }: Props) {
         <Input
           label="Title"
           value={title}
-          onChange={setTitle}
+          onChange={(value) => {
+            edited.current.title = true;
+            setTitle(value);
+          }}
           classNames={fieldShape}
           className="[&_input]:text-[13px]"
         />
@@ -140,7 +207,10 @@ export function CaptureCard({ tab, lists, profile, webOrigin }: Props) {
             autoFocus={!hasPrice}
             placeholder="0"
             value={price}
-            onChange={setPrice}
+            onChange={(value) => {
+              edited.current.price = true;
+              setPrice(value);
+            }}
             leftIcon={<span className="text-lg text-foreground">{currencySymbol(currency).trim()}</span>}
             classNames={{
               field: 'h-14 rounded-[var(--radius-control)]',
@@ -173,19 +243,21 @@ export function CaptureCard({ tab, lists, profile, webOrigin }: Props) {
             inputMode="decimal"
             placeholder="Optional"
             value={target}
+            disabled={locked}
             onChange={setTarget}
             classNames={fieldShape}
           />
           <div className="flex flex-col gap-1.5">
             <span className="px-1 text-sm font-medium">List</span>
-            <Select value={listId} onValueChange={setListId} disabled={lists.length === 0}>
+            <Select value={shownListId} onValueChange={setListId} disabled={lists.length === 0 || locked}>
+              {/* The trigger draws the selected list itself: SelectValue only shows plain-text labels. */}
               <SelectTrigger className="h-11 rounded-[var(--radius-control)]">
-                <SelectValue placeholder="Wishlist" />
+                <ListLabel name={listName} emoji={shownList?.emoji} />
               </SelectTrigger>
               <SelectContent>
                 {lists.map((list) => (
                   <SelectItem key={list.id} value={list.id}>
-                    {list.emoji && !list.emoji.startsWith('i:') ? `${list.emoji} ${list.name}` : list.name}
+                    <ListLabel name={list.name} emoji={list.emoji} />
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -203,14 +275,14 @@ export function CaptureCard({ tab, lists, profile, webOrigin }: Props) {
           items={items}
           value={phase}
           cycle={false}
-          variant="primary"
+          variant={phase === 'saved' || phase === 'removing' ? 'secondary' : 'primary'}
           size="lg"
           animation="roll"
-          onClick={add}
-          disabled={phase === 'adding'}
-          className="w-full rounded-[var(--radius-control)]"
+          onClick={press}
+          disabled={phase !== 'ready' && phase !== 'saved'}
+          className="w-full rounded-[var(--radius-control)] disabled:opacity-100"
         />
-        {done && (
+        {isSaved && (
           <a
             href={`${webOrigin}/app`}
             target="_blank"
@@ -222,5 +294,14 @@ export function CaptureCard({ tab, lists, profile, webOrigin }: Props) {
         )}
       </div>
     </section>
+  );
+}
+
+function ListLabel({ name, emoji }: { name: string; emoji?: string }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <ListIcon value={emoji} className="size-3.5" />
+      <span className="truncate whitespace-nowrap">{name}</span>
+    </span>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractCapture } from '@/utils/extract';
+import { extractCapture, mayBeProductPage } from '@/utils/extract';
 
 function parse(html: string, url: string) {
   document.documentElement.innerHTML = html;
@@ -180,5 +180,128 @@ describe('generic fallback', () => {
   it('returns a capture without a price when none is found', () => {
     const { capture } = parse(`<head><title>About us</title></head><body>Hello</body>`, 'https://x.example/about');
     expect(capture?.price_minor).toBe(0);
+  });
+});
+
+describe('pages with many products', () => {
+  const cards = (n: number) =>
+    Array.from({ length: n }, (_, i) => `<div><span class="a-price"><span class="a-offscreen">₹${(i + 1) * 1000}</span></span></div>`).join('');
+
+  it('treats the amazon.in home page as a listing, not a product priced from its first card', () => {
+    const result = parse(
+      `<head><title>Online Shopping site in India</title><meta property="og:title" content="Amazon.in"></head>
+       <body><span class="a-price-whole">1,799</span>${cards(8)}</body>`,
+      'https://www.amazon.in/',
+    );
+    expect(result).toMatchObject({ capture: null, listing: true });
+  });
+
+  it('treats amazon.in and flipkart search pages as listings', () => {
+    expect(parse(`<body>${cards(3)}</body>`, 'https://www.amazon.in/s?k=headphones').listing).toBe(true);
+    expect(
+      parse(`<div class="Nx9bqj">₹999</div><h1>Phones</h1>`, 'https://www.flipkart.com/search?q=phone').listing,
+    ).toBe(true);
+  });
+
+  it('keeps an amazon.in product page a product even with many prices in carousels', () => {
+    const { capture, listing } = parse(
+      `<span id="productTitle">Echo</span>
+       <div id="corePrice_feature_div"><span class="a-price"><span class="a-offscreen">₹4,499</span></span></div>${cards(10)}`,
+      'https://www.amazon.in/Echo-Dot/dp/B0CHX1W1XY?ref=abc',
+    );
+    expect(listing).toBe(false);
+    expect(capture?.price_minor).toBe(449900);
+  });
+
+  it('treats a generic page with many prices and no product data as a listing', () => {
+    const prices = Array.from({ length: 8 }, (_, i) => `<p>Lamp ${i} ₹${(i + 1) * 250}</p>`).join('');
+    expect(parse(`<head><title>All lamps</title></head><body>${prices}</body>`, 'https://shop.example/lamps')).toMatchObject({
+      capture: null,
+      listing: true,
+    });
+  });
+
+  it('trusts product JSON-LD over the price count', () => {
+    const prices = Array.from({ length: 8 }, (_, i) => `<p>₹${(i + 1) * 250}</p>`).join('');
+    const { capture, listing } = parse(
+      `${ld({ '@type': 'Product', name: 'Lamp', offers: { '@type': 'Offer', price: '1999', priceCurrency: 'INR' } })}<body>${prices}</body>`,
+      'https://shop.example/lamp',
+    );
+    expect(listing).toBe(false);
+    expect(capture?.price_minor).toBe(199900);
+  });
+
+  it('treats an ItemList of different products as a listing', () => {
+    const item = (name: string, price: string) => ({ '@type': 'Product', name, offers: { '@type': 'Offer', price } });
+    const result = parse(
+      ld({
+        '@type': 'ItemList',
+        itemListElement: [
+          { '@type': 'ListItem', item: item('A', '100') },
+          { '@type': 'ListItem', item: item('B', '200') },
+          { '@type': 'ListItem', item: item('C', '300') },
+        ],
+      }),
+      'https://shop.example/collections/all',
+    );
+    expect(result).toMatchObject({ capture: null, listing: true });
+  });
+
+  it('does not count variants of one product as many products', () => {
+    const { capture, listing } = parse(
+      ld({
+        '@type': 'ProductGroup',
+        name: 'Tee',
+        hasVariant: ['S', 'M', 'L'].map((size) => ({
+          '@type': 'Product',
+          name: `Tee ${size}`,
+          offers: { '@type': 'Offer', price: '499', priceCurrency: 'INR' },
+        })),
+      }),
+      'https://shop.example/products/tee',
+    );
+    expect(listing).toBe(false);
+    expect(capture?.price_minor).toBe(49900);
+  });
+});
+
+describe('price refresh of a saved product (knownProduct)', () => {
+  it('keeps the guessed price on a page that would otherwise count as a listing', () => {
+    const prices = Array.from({ length: 8 }, (_, i) => `<p>₹${(i + 1) * 250}</p>`).join('');
+    document.documentElement.innerHTML = `<head><title>Lamp</title></head><body>${prices}</body>`;
+    const { capture, listing } = extractCapture(document, 'https://shop.example/lamp', { knownProduct: true });
+    expect(listing).toBe(false);
+    expect(capture?.price_minor).toBe(25000);
+  });
+
+  it('reads a known store URL without a product path', () => {
+    document.documentElement.innerHTML = `<span class="VU-ZEz">Phone</span><div class="Nx9bqj">₹9,999</div>`;
+    const { capture } = extractCapture(document, 'https://dl.flipkart.com/s/abc', { knownProduct: true });
+    expect(capture?.price_minor).toBe(999900);
+  });
+
+  it('keeps the first product of a JSON-LD list', () => {
+    const item = (name: string, price: string) => ({ '@type': 'Product', name, offers: { '@type': 'Offer', price } });
+    document.documentElement.innerHTML = ld([item('A', '100'), item('B', '200'), item('C', '300')]);
+    const { capture } = extractCapture(document, 'https://shop.example/a', { knownProduct: true });
+    expect(capture).toMatchObject({ title: 'A', price_minor: 10000 });
+  });
+});
+
+describe('mayBeProductPage', () => {
+  const check = (html: string, url: string) => {
+    document.documentElement.innerHTML = html;
+    return mayBeProductPage(document, url);
+  };
+
+  it('passes known stores and pages with product data', () => {
+    expect(check('<body></body>', 'https://www.amazon.in/')).toBe(true);
+    expect(check(ld({ '@type': 'Product', name: 'Lamp' }), 'https://shop.example/lamp')).toBe(true);
+    expect(check('<head><meta property="og:type" content="og:product"></head>', 'https://shop.example/a')).toBe(true);
+    expect(check('<span itemprop="price" content="10"></span>', 'https://shop.example/b')).toBe(true);
+  });
+
+  it('skips other pages', () => {
+    expect(check('<head><title>News</title></head><body>₹100</body>', 'https://news.example/story')).toBe(false);
   });
 });

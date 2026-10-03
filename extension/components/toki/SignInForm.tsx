@@ -43,7 +43,7 @@ export function SignInForm() {
   return (
     <form
       onSubmit={submit}
-      className="flex flex-col gap-4 rounded-[var(--radius-card)] bg-card p-5 shadow-[var(--shadow-card)]"
+      className="flex flex-col gap-4 py-2"
     >
       <div>
         <h1 className="figure m-0 text-[22px] font-semibold leading-tight">Sign in to Toki</h1>
