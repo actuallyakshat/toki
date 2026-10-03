@@ -3,11 +3,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { incomeFromProfile, type Income } from "@/lib/format";
 import { useDeviceIncome } from "@/lib/income";
+import { needsSalaryOnboarding } from "@/lib/onboarding";
 import { restoreMode, setMode, useMode, type Mode } from "@/lib/mode";
 import { useLists } from "@/lib/hooks/use-wishlist";
 import type { List, Profile, User } from "@/lib/types";
 
-export type ModalView = "add" | "income" | "new-list" | "edit-list" | "share";
+export type ModalView = "onboarding" | "add" | "income" | "new-list" | "edit-list" | "share";
 
 interface AppState {
   user: User;
@@ -55,6 +56,14 @@ export function AppProvider({ user, profile, children }: { user: User; profile: 
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => restoreMode(), []);
+  // First visit without a salary: offer it once the shell has painted, so the modal animates in.
+  useEffect(() => {
+    if (!needsSalaryOnboarding(user.id, profile)) return;
+    const t = setTimeout(() => setModal((m) => m ?? "onboarding"), 400);
+    return () => clearTimeout(t);
+    // Only on sign-in; saving a salary later changes the profile but must not re-check.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id]);
   useEffect(() => {
     if (mode === "time" && !income) setMode("money", { persist: false });
   }, [mode, income]);

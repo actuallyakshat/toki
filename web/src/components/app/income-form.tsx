@@ -1,18 +1,31 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Input } from "@/components/motion/input";
 import { Switch } from "@/components/motion/switch";
 import { StatefulButton } from "@/components/motion/button";
 import { ApiError, api } from "@/lib/api";
+import type { Income } from "@/lib/format";
 import { useDeviceIncome, saveDeviceIncome } from "@/lib/income";
 import { meKey } from "@/lib/hooks/use-session";
 import { minorToInput, parseMinor } from "@/lib/money-input";
 import { useApp } from "./app-context";
 
 /** Monthly in-hand salary and weekly hours, with the option to keep both on this device. */
-export function IncomeForm({ submitLabel, onSaved }: { submitLabel: string; onSaved?: () => void }) {
+export function IncomeForm({
+  submitLabel,
+  onSaved,
+  onDraftChange,
+  secondaryAction,
+}: {
+  submitLabel: string;
+  onSaved?: () => void;
+  /** The salary and hours as typed, or null while either is not usable yet. */
+  onDraftChange?: (draft: Income | null) => void;
+  /** Rendered under the submit button, e.g. a way to skip. */
+  secondaryAction?: ReactNode;
+}) {
   const qc = useQueryClient();
   const { profile, income } = useApp();
   const device = useDeviceIncome();
@@ -22,6 +35,12 @@ export function IncomeForm({ submitLabel, onSaved }: { submitLabel: string; onSa
   const [deviceOnly, setDeviceOnly] = useState(profile.income_storage === "device" || (!income && device !== null));
   const [errors, setErrors] = useState<{ salary?: string; hours?: string; form?: string }>({});
   const [state, setState] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  function draft(nextSalary: string, nextHours: string) {
+    const monthly = parseMinor(nextSalary);
+    const weekly = Number(nextHours);
+    onDraftChange?.(monthly && weekly >= 1 && weekly <= 100 ? { monthly_income_minor: monthly, hours_per_week: weekly } : null);
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -59,7 +78,10 @@ export function IncomeForm({ submitLabel, onSaved }: { submitLabel: string; onSa
           inputMode="numeric"
           autoComplete="off"
           value={salary}
-          onChange={setSalary}
+          onChange={(v) => {
+            setSalary(v);
+            draft(v, hours);
+          }}
           error={errors.salary}
           reserveErrorLine
         />
@@ -68,7 +90,10 @@ export function IncomeForm({ submitLabel, onSaved }: { submitLabel: string; onSa
           inputMode="numeric"
           autoComplete="off"
           value={hours}
-          onChange={setHours}
+          onChange={(v) => {
+            setHours(v);
+            draft(salary, v);
+          }}
           error={errors.hours}
           reserveErrorLine
         />
@@ -97,6 +122,7 @@ export function IncomeForm({ submitLabel, onSaved }: { submitLabel: string; onSa
       >
         {submitLabel}
       </StatefulButton>
+      {secondaryAction}
     </form>
   );
 }
