@@ -12,10 +12,10 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/motion/tabs";
 import { useToast } from "@/components/providers/toast-provider";
 import { TokiButton } from "@/components/shared/buttons";
 import { GridSizeToggle } from "@/components/shared/grid-size-toggle";
-import { ApiError, api } from "@/lib/api";
-import { meKey } from "@/lib/hooks/use-session";
+import { api } from "@/lib/api";
+import { useUpdateProfile } from "@/lib/hooks/use-profile";
 import { findSettingsSection } from "@/lib/settings-sections";
-import type { AlertMode, Profile } from "@/lib/types";
+import type { AlertMode } from "@/lib/types";
 
 const CURRENCIES = [
   { code: "INR", label: "Indian rupee (INR)" },
@@ -56,22 +56,9 @@ export default function SettingsSectionPage() {
   const { user, profile } = useApp();
   const { theme, setTheme } = useTheme();
 
-  const save = useMutation({
-    mutationFn: (patch: Partial<Profile>) => api.updateProfile(patch),
-    onMutate: async (patch) => {
-      await qc.cancelQueries({ queryKey: meKey });
-      const previous = qc.getQueryData(meKey);
-      qc.setQueryData(meKey, (old: { user: unknown; profile: Profile } | undefined) =>
-        old && { ...old, profile: { ...old.profile, ...patch } },
-      );
-      return { previous };
-    },
-    onError: (e, _p, ctx) => {
-      qc.setQueryData(meKey, ctx?.previous);
-      notify({ status: "error", title: "Toki could not save that setting", description: e instanceof ApiError ? e.message : "Try again." });
-    },
-    onSuccess: () => notify({ status: "success", title: "Settings saved" }),
-  });
+  // Optimistic: toggles and selects apply before the server answers.
+  // The hook rolls back with an error toast; success stays silent.
+  const save = useUpdateProfile();
 
   const logout = useMutation({
     mutationFn: api.logout,

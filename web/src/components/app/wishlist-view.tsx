@@ -11,7 +11,6 @@ import {
   SortableListItemContent,
   SortableListUndo,
 } from "@/components/motion/sortable-list";
-import { useToast } from "@/components/providers/toast-provider";
 import { DeltaChip } from "@/components/shared/delta-chip";
 import { PriceFigure } from "@/components/shared/price-figure";
 import { ProductImage } from "@/components/shared/product-image";
@@ -82,7 +81,6 @@ export function WishlistView({ view }: { view: ViewKind }) {
 /** Drag order is written to the cache while moving and sent to the server once the drag settles. */
 function PriorityList({ listId, items }: { listId: string; items: Item[] }) {
   const qc = useQueryClient();
-  const notify = useToast();
   const { mode, income, openItem } = useApp();
   const reorder = useReorder(listId);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -95,14 +93,8 @@ function PriorityList({ listId, items }: { listId: string; items: Item[] }) {
       next.map((item, position) => ({ ...item, position })),
     );
     clearTimeout(timer.current);
-    timer.current = setTimeout(
-      () =>
-        reorder.mutate(
-          next.map((i) => i.id),
-          { onError: () => notify({ status: "error", title: "Toki could not save the order", description: "The list went back to its saved order." }) },
-        ),
-      500,
-    );
+    // The new order is already on screen; the hook rolls back with an error toast if the save fails.
+    timer.current = setTimeout(() => reorder.mutate(next.map((i) => i.id)), 500);
   };
 
   return (

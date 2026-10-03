@@ -1,14 +1,13 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Input } from "@/components/motion/input";
 import { Switch } from "@/components/motion/switch";
 import { StatefulButton } from "@/components/motion/button";
-import { ApiError, api } from "@/lib/api";
+import { errorMessage } from "@/lib/api";
 import type { Income } from "@/lib/format";
 import { useDeviceIncome, saveDeviceIncome } from "@/lib/income";
-import { meKey } from "@/lib/hooks/use-session";
+import { useUpdateProfile } from "@/lib/hooks/use-profile";
 import { minorToInput, parseMinor } from "@/lib/money-input";
 import { useApp } from "./app-context";
 
@@ -26,9 +25,9 @@ export function IncomeForm({
   /** Rendered under the submit button, e.g. a way to skip. */
   secondaryAction?: ReactNode;
 }) {
-  const qc = useQueryClient();
   const { profile, income } = useApp();
   const device = useDeviceIncome();
+  const save = useUpdateProfile({ toastErrors: false });
 
   const [salary, setSalary] = useState(minorToInput(income?.monthly_income_minor));
   const [hours, setHours] = useState(String(income?.hours_per_week ?? 45));
@@ -42,7 +41,7 @@ export function IncomeForm({
     onDraftChange?.(monthly && weekly >= 1 && weekly <= 100 ? { monthly_income_minor: monthly, hours_per_week: weekly } : null);
   }
 
-  async function submit(e: FormEvent) {
+  function submit(e: FormEvent) {
     e.preventDefault();
     const monthly = parseMinor(salary);
     const weekly = Number(hours);
@@ -53,21 +52,25 @@ export function IncomeForm({
     setErrors(next);
     if (!monthly || next.hours) return;
 
+    const patch = deviceOnly
+      ? { income_storage: "device" as const, monthly_income_minor: null, hours_per_week: null }
+      : { income_storage: "server" as const, monthly_income_minor: monthly, hours_per_week: weekly };
+    // Optimistic: hours apply before the server answers. Device income saves now;
+    // the hook rolls the profile back if the save fails, and the form shows why.
+    saveDeviceIncome(deviceOnly ? { monthly_income_minor: monthly, hours_per_week: weekly } : null);
     setState("loading");
-    try {
-      const patch = deviceOnly
-        ? { income_storage: "device" as const, monthly_income_minor: null, hours_per_week: null }
-        : { income_storage: "server" as const, monthly_income_minor: monthly, hours_per_week: weekly };
-      const { profile: saved } = await api.updateProfile(patch);
-      saveDeviceIncome(deviceOnly ? { monthly_income_minor: monthly, hours_per_week: weekly } : null);
-      qc.setQueryData(meKey, (old: { user: unknown; profile: unknown } | undefined) => old && { ...old, profile: saved });
-      setState("success");
-      onSaved?.();
-      setTimeout(() => setState("idle"), 1200);
-    } catch (err) {
-      setState("error");
-      setErrors({ form: err instanceof ApiError ? err.message : "Toki could not save your salary. Try again." });
-    }
+    save.mutate(patch, {
+      onSuccess: () => {
+        setState("success");
+        setErrors({});
+        onSaved?.();
+        setTimeout(() => setState("idle"), 1200);
+      },
+      onError: (err) => {
+        setState("error");
+        setErrors({ form: errorMessage(err, "Toki could not save your salary. Try again.") });
+      },
+    });
   }
 
   return (

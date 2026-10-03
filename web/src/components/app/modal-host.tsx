@@ -6,7 +6,7 @@ import { MorphingModal } from "@/components/motion/morphing-modal";
 import { StatefulButton } from "@/components/motion/button";
 import { Input } from "@/components/motion/input";
 import { useToast } from "@/components/providers/toast-provider";
-import { ApiError } from "@/lib/api";
+import { errorMessage } from "@/lib/api";
 import { useCreateList, useUpdateList } from "@/lib/hooks/use-wishlist";
 import { Switch } from "@/components/motion/switch";
 import { TokiButton } from "@/components/shared/buttons";
@@ -146,7 +146,7 @@ function OnboardingView({ onLater, onSaved }: { onLater: () => void; onSaved: ()
 }
 
 function NewListView({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
-  const create = useCreateList();
+  const create = useCreateList({ toastErrors: false });
   const notify = useToast();
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState(DEFAULT_LIST_ICON);
@@ -171,7 +171,7 @@ function NewListView({ onClose, onCreated }: { onClose: () => void; onCreated: (
             notify({ status: "success", title: "List created", description: list.name });
             onClose();
           } catch (err) {
-            setError(err instanceof ApiError ? err.message : "Toki could not create the list. Try again.");
+            setError(errorMessage(err, "Toki could not create the list. Try again."));
           }
         }}
       >
@@ -205,7 +205,7 @@ function NewListView({ onClose, onCreated }: { onClose: () => void; onCreated: (
 /** Rename the current list or change its icon. A list that still has an emoji keeps it until an icon is picked. */
 function EditListView({ onClose }: { onClose: () => void }) {
   const { list } = useApp();
-  const update = useUpdateList();
+  const update = useUpdateList({ toastErrors: false });
   const notify = useToast();
   const [name, setName] = useState(list?.name ?? "");
   const [emoji, setEmoji] = useState(list?.emoji || DEFAULT_LIST_ICON);
@@ -231,7 +231,7 @@ function EditListView({ onClose }: { onClose: () => void }) {
             notify({ status: "success", title: "List updated", description: name.trim() });
             onClose();
           } catch (err) {
-            setError(err instanceof ApiError ? err.message : "Toki could not save the list. Try again.");
+            setError(errorMessage(err, "Toki could not save the list. Try again."));
           }
         }}
       >
@@ -278,12 +278,7 @@ function ShareView({ onClose }: { onClose: () => void }) {
         <Switch
           checked={shared}
           ariaLabel="Anyone with the link can view this list"
-          onCheckedChange={(on) =>
-            update.mutate(
-              { id: list.id, visibility: on ? "link" : "private" },
-              { onError: () => notify({ status: "error", title: "Toki could not change sharing", description: "Try again." }) },
-            )
-          }
+          onCheckedChange={(on) => update.mutate({ id: list.id, visibility: on ? "link" : "private" })}
         />
       </div>
       {shared && (

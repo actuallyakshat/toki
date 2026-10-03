@@ -6,8 +6,7 @@ import { StatefulButton } from "@/components/motion/button";
 import { Input } from "@/components/motion/input";
 import { ProductImage } from "@/components/shared/product-image";
 import { TokiButton } from "@/components/shared/buttons";
-import { useToast } from "@/components/providers/toast-provider";
-import { ApiError, api } from "@/lib/api";
+import { ApiError, api, errorMessage } from "@/lib/api";
 import { formatMoney, retailerName } from "@/lib/format";
 import { useAddItem } from "@/lib/hooks/use-wishlist";
 import { parseMinor } from "@/lib/money-input";
@@ -93,7 +92,7 @@ function PasteStep({ flow, onClose }: { flow: AddFlowState; onClose: () => void 
         return;
       }
       setState("error");
-      setError(e instanceof ApiError ? e.message : "Toki could not read that link. Try again.");
+      setError(errorMessage(e, "Toki could not read that link. Try again."));
     }
   }
 
@@ -137,32 +136,29 @@ function PasteStep({ flow, onClose }: { flow: AddFlowState; onClose: () => void 
 function PreviewStep({ flow, onClose }: { flow: AddFlowState; onClose: () => void }) {
   const { list, closeModal } = useApp();
   const add = useAddItem();
-  const notify = useToast();
   const [target, setTarget] = useState("");
   const [error, setError] = useState<string>();
   const capture = flow.capture;
   if (!capture) return null;
 
-  async function submit() {
+  function submit() {
     if (!capture) return;
     const targetMinor = target.trim() ? parseMinor(target) : undefined;
     if (target.trim() && !targetMinor) {
       setError("Enter the price you want to pay, for example 11999.");
       return;
     }
-    try {
-      const item = await add.mutateAsync({
-        url: capture.source_url,
-        list_id: list?.id,
-        capture,
-        target_price_minor: targetMinor ?? undefined,
-      });
-      notify({ status: "success", title: "Added to Toki", description: item.product.title });
-      closeModal();
-      flow.reset();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Toki could not add this item. Try again.");
-    }
+    const payload = {
+      url: capture.source_url,
+      list_id: list?.id,
+      capture,
+      target_price_minor: targetMinor ?? undefined,
+    };
+    // Optimistic: the placeholder card is in the grid before the server answers.
+    // The hook rolls it back with an error toast if the save fails.
+    add.mutate(payload);
+    closeModal();
+    flow.reset();
   }
 
   return (
@@ -197,8 +193,6 @@ function PreviewStep({ flow, onClose }: { flow: AddFlowState; onClose: () => voi
         <StatefulButton
           type="button"
           onClick={submit}
-          state={add.isPending ? "loading" : "idle"}
-          loadingText="Adding"
           className="flex-1 rounded-[var(--radius-control)]"
         >
           Add to Toki
@@ -211,12 +205,11 @@ function PreviewStep({ flow, onClose }: { flow: AddFlowState; onClose: () => voi
 function ManualStep({ flow, onClose }: { flow: AddFlowState; onClose: () => void }) {
   const { list, closeModal } = useApp();
   const add = useAddItem();
-  const notify = useToast();
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
-  const [errors, setErrors] = useState<{ title?: string; price?: string; form?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; price?: string }>({});
 
-  async function submit() {
+  function submit() {
     const minor = parseMinor(price);
     const next = {
       title: title.trim() ? undefined : "Enter the product name.",
@@ -225,27 +218,23 @@ function ManualStep({ flow, onClose }: { flow: AddFlowState; onClose: () => void
     setErrors(next);
     if (next.title || !minor) return;
     const url = flow.url.trim();
-    try {
-      const item = await add.mutateAsync({
-        url,
-        list_id: list?.id,
-        capture: {
-          source_url: url,
-          title: title.trim(),
-          image_url: "",
-          price_minor: minor,
-          currency: "INR",
-          original_price_minor: null,
-          in_stock: true,
-          retailer: "generic",
-        },
-      });
-      notify({ status: "success", title: "Added to Toki", description: item.product.title });
-      closeModal();
-      flow.reset();
-    } catch (e) {
-      setErrors({ form: e instanceof ApiError ? e.message : "Toki could not add this item. Try again." });
-    }
+    // Optimistic: close now, the card is already in the grid. Failure rolls back with a toast.
+    add.mutate({
+      url,
+      list_id: list?.id,
+      capture: {
+        source_url: url,
+        title: title.trim(),
+        image_url: "",
+        price_minor: minor,
+        currency: "INR",
+        original_price_minor: null,
+        in_stock: true,
+        retailer: "generic",
+      },
+    });
+    closeModal();
+    flow.reset();
   }
 
   return (
@@ -267,11 +256,6 @@ function ManualStep({ flow, onClose }: { flow: AddFlowState; onClose: () => void
           autoComplete="off"
         />
       </div>
-      {errors.form && (
-        <p role="alert" className="mb-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
-          {errors.form}
-        </p>
-      )}
       <div className="flex gap-2">
         <TokiButton variant="ghost" onClick={() => flow.setStep("paste")}>
           Use another link
@@ -279,8 +263,6 @@ function ManualStep({ flow, onClose }: { flow: AddFlowState; onClose: () => void
         <StatefulButton
           type="button"
           onClick={submit}
-          state={add.isPending ? "loading" : "idle"}
-          loadingText="Adding"
           className="flex-1 rounded-[var(--radius-control)]"
         >
           Add to Toki

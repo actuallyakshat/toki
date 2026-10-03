@@ -10,7 +10,6 @@ import { TokiButton, TokiButtonLink } from "@/components/shared/buttons";
 import { DeltaChip } from "@/components/shared/delta-chip";
 import { PriceFigure } from "@/components/shared/price-figure";
 import { ProductImage } from "@/components/shared/product-image";
-import { ApiError } from "@/lib/api";
 import { formatDayMonth, formatMoney, isCooling, retailerName, timeAgo } from "@/lib/format";
 import { useItems, useRefreshItem, useUpdateItem } from "@/lib/hooks/use-wishlist";
 import { minorToInput, parseMinor } from "@/lib/money-input";
@@ -71,14 +70,7 @@ function DetailBody({ item, onClose }: { item: Item; onClose: () => void }) {
   const [percent, setPercent] = useState(String(item.alert_rule.type === "percent_drop" ? item.alert_rule.percent : 10));
 
   const patch = (body: Parameters<typeof update.mutate>[0]["patch"], onSuccess?: () => void) =>
-    update.mutate(
-      { id: item.id, patch: body },
-      {
-        onSuccess,
-        onError: (e) =>
-          notify({ status: "error", title: "Toki could not save that change", description: e instanceof ApiError ? e.message : "Try again." }),
-      },
-    );
+    update.mutate({ id: item.id, patch: body }, { onSuccess });
 
   const saveTarget = () => {
     const trimmed = target.trim();
@@ -125,8 +117,6 @@ function DetailBody({ item, onClose }: { item: Item; onClose: () => void }) {
             action: { label: "Undo", onClick: () => update.mutate({ id: item.id, patch: { status: "wanted" } }) },
           });
         },
-        onError: (e) =>
-          notify({ status: "error", title: "Toki could not save that change", description: e instanceof ApiError ? e.message : "Try again." }),
       },
     );
   };
@@ -134,12 +124,6 @@ function DetailBody({ item, onClose }: { item: Item; onClose: () => void }) {
   const queueRefresh = () =>
     refresh.mutate(item.id, {
       onSuccess: () => notify({ status: "info", title: "Price check queued", description: "Toki will check this price on the next run of your extension." }),
-      onError: (e) =>
-        notify({
-          status: "error",
-          title: "Toki could not queue the check",
-          description: e instanceof ApiError ? e.message : "Try again in a minute.",
-        }),
     });
 
   return (

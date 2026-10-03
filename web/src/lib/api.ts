@@ -22,6 +22,11 @@ export class ApiError extends Error {
   }
 }
 
+/** The sentence to show for a failed request. Every request failure is an ApiError that already carries one. */
+export function errorMessage(e: unknown, fallback = "Something went wrong. Try again."): string {
+  return e instanceof ApiError ? e.message : fallback;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
