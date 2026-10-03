@@ -1,0 +1,110 @@
+/* Toki design tokens — copy verbatim into web/ and extension/. Do not fork values. */
+/* After Synara (https://trysynara.com): warm paper and warm charcoal, hairlines, ink buttons, no shadows.
+   Purple from zeron.sh. */
+:root {
+  color-scheme: light;
+
+  /* Base palette (light) */
+  --toki-porcelain: #f5f4f2;  /* page background */
+  --toki-raise: #e8e6e2;      /* elevated blocks: frames around screenshots, chips, wells */
+  --toki-paper: #fbfaf8;      /* cards, popovers */
+  --toki-ink: #141413;        /* text */
+  --toki-ink-soft: #5b5955;   /* secondary text */
+  --toki-ink-faint: #66635e;  /* eyebrows, captions */
+  --toki-link: #5b34b8;       /* zeron.sh purple, deep: links, kickers, selection */
+  --toki-purple: #8b5cf6;     /* zeron.sh purple: time mode accent, focus ring */
+  --toki-marigold: #f2a900;   /* warnings only */
+  --toki-jade: #2e8540;       /* price went down (good) */
+  --toki-kumkum: #c8372d;     /* price went up / errors */
+
+  /* Semantic */
+  --bg: var(--toki-porcelain);
+  --raise: var(--toki-raise);
+  --surface: var(--toki-paper);
+  --surface-sunk: color-mix(in oklab, var(--toki-ink) 6%, transparent);
+  --text: var(--toki-ink);
+  --text-muted: var(--toki-ink-soft);
+  --text-faint: var(--toki-ink-faint);
+  --border: color-mix(in oklab, var(--toki-ink) 12%, transparent);
+  --border-soft: color-mix(in oklab, var(--toki-ink) 7%, transparent);
+  --accent: #1c1917;                   /* primary buttons are ink; switches to purple in time mode */
+  --accent-hover: #292524;
+  --accent-contrast: #fafaf9;
+  --highlight: var(--toki-link);
+  --down: var(--toki-jade);
+  --up: var(--toki-kumkum);
+  --focus: var(--toki-purple);
+
+  /* Shape — crisp: pills only for buttons; controls 8px, cards 6px, images 4px */
+  --radius-button: 999px;
+  --radius-control: 8px;
+  --radius-card: 6px;
+  --radius-frame: 12px;
+  --radius-chip: 4px;
+  --radius-image: 4px;
+
+  /* Elevation — none. Surfaces are separated by hairlines, drawn as a 1px ring. */
+  --shadow-card: 0 0 0 1px var(--border);
+  --shadow-lift: 0 0 0 1px color-mix(in oklab, var(--toki-ink) 22%, transparent), 0 12px 32px -16px rgb(0 0 0 / 0.18);
+
+  /* Type — Geist and Geist Mono only. Mono is for small uppercase eyebrows, never prose or prices. */
+  --font-display: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+
+  /* Motion — quick everywhere except the time toggle (--dur-slow) */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 420ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* springs for motion/react: { type: "spring", stiffness: 380, damping: 32 } (UI), { stiffness: 220, damping: 26 } (layout) */
+}
+
+/* Dark: warm graphite, a step lighter than Synara so it never reads as black. Applies when chosen, or when the browser prefers dark and no theme is set. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --toki-porcelain: #1c1b1a;
+    --toki-raise: #262523;
+    --toki-paper: #232220;
+    --toki-ink: #f5f4f2;
+    --toki-ink-soft: #aaa8a3;
+    --toki-ink-faint: #97948e;
+    --toki-link: #b79df9;
+    --toki-jade: #78bc82;
+    --toki-kumkum: #ef7770;
+    --surface-sunk: color-mix(in oklab, var(--toki-ink) 8%, transparent);
+    --accent: #fafaf9;
+    --accent-hover: #e7e5e4;
+    --accent-contrast: #121110;
+    --shadow-lift: 0 0 0 1px color-mix(in oklab, var(--toki-ink) 22%, transparent), 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --toki-porcelain: #1c1b1a;
+  --toki-raise: #262523;
+  --toki-paper: #232220;
+  --toki-ink: #f5f4f2;
+  --toki-ink-soft: #aaa8a3;
+  --toki-ink-faint: #97948e;
+  --toki-link: #b79df9;
+  --toki-jade: #78bc82;
+  --toki-kumkum: #ef7770;
+  --surface-sunk: color-mix(in oklab, var(--toki-ink) 8%, transparent);
+  --accent: #fafaf9;
+  --accent-hover: #e7e5e4;
+  --accent-contrast: #121110;
+  --shadow-lift: 0 0 0 1px color-mix(in oklab, var(--toki-ink) 22%, transparent), 0 12px 32px -16px rgb(0 0 0 / 0.6);
+}
+
+/* Time mode: set data-mode="time" on <html>. The accent becomes zeron.sh purple in either theme. */
+:root[data-mode="time"] {
+  --accent: var(--toki-purple);
+  --accent-hover: #7c4ef0;
+  --accent-contrast: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms; }
+}

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 0 660 660" role="img" aria-label="Over-ear headphones">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3e6d3"/><stop offset="1" stop-color="#e3c9a8"/></linearGradient>
+    <linearGradient id="cup" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b2f55"/><stop offset="1" stop-color="#14172e"/></linearGradient>
+  </defs>
+  <rect x="-30" y="0" width="660" height="660" fill="url(#bg)"/>
+  <ellipse cx="300" cy="590" rx="190" ry="22" fill="#1b1f3b" opacity=".12"/>
+  <path d="M120 360 C120 130 480 130 480 360" fill="none" stroke="#1b1f3b" stroke-width="30" stroke-linecap="round"/>
+  <path d="M120 360 C120 160 480 160 480 360" fill="none" stroke="#f2a900" stroke-width="5" stroke-linecap="round" opacity=".9" transform="translate(0 -6)"/>
+  <rect x="78" y="330" width="96" height="190" rx="46" fill="url(#cup)"/>
+  <rect x="426" y="330" width="96" height="190" rx="46" fill="url(#cup)"/>
+  <rect x="96" y="352" width="22" height="146" rx="11" fill="#fff" opacity=".12"/>
+  <rect x="444" y="352" width="22" height="146" rx="11" fill="#fff" opacity=".12"/>
+</svg>

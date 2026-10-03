@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: toki
+      POSTGRES_PASSWORD: toki
+      POSTGRES_DB: toki
+    ports:
+      - "5433:5432"
+    volumes:
+      - toki-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toki"]
+      interval: 3s
+      retries: 20
+volumes:
+  toki-db:

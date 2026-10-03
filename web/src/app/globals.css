@@ -1,0 +1,147 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Names the beUI components read, mapped onto the Toki tokens. --border and --accent come from tokens.css. */
+:root {
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --popover: var(--surface);
+  --muted: var(--surface-sunk);
+  --muted-foreground: var(--text-muted);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-contrast);
+  --ring: var(--focus);
+  --input: var(--border);
+  --destructive: var(--up);
+  --success: var(--down);
+  --warning: var(--toki-marigold);
+  --border-strong: color-mix(in oklab, var(--border), var(--text) 22%);
+  --color-success: var(--down);
+  --color-border-strong: var(--border-strong);
+  --font-display: var(--font-geist), "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-geist), "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, "SF Mono", monospace;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-popover: var(--surface);
+  --color-muted: var(--surface-sunk);
+  --color-muted-foreground: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--focus);
+  --color-input: var(--border);
+  --color-border: var(--border);
+  --color-destructive: var(--up);
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-down: var(--down);
+  --color-up: var(--up);
+  --color-marigold: var(--toki-marigold);
+  --color-purple: var(--toki-purple);
+  --color-ink: var(--toki-ink);
+  --color-ink-soft: var(--toki-ink-soft);
+  --color-porcelain: var(--toki-porcelain);
+  --color-surface: var(--surface);
+  --color-raise: var(--raise);
+  --color-highlight: var(--highlight);
+  --color-accent-hover: var(--accent-hover);
+  --color-border-soft: var(--border-soft);
+  --color-text-faint: var(--text-faint);
+  --color-surface-sunk: var(--surface-sunk);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --radius-button: var(--radius-button);
+  --radius-frame: var(--radius-frame);
+  --radius-card: var(--radius-card);
+  --radius-control: var(--radius-control);
+  --radius-chip: var(--radius-chip);
+  --radius-image: var(--radius-image);
+  --shadow-card: var(--shadow-card);
+  --shadow-lift: var(--shadow-lift);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    transition: background-color var(--dur-slow) var(--ease-out);
+  }
+
+  body {
+    min-height: 100dvh;
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--highlight) 40%, transparent);
+  }
+}
+
+/* Layered, so a component's own outline-none or ring wins over this default. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+
+.figure {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+/* Small uppercase mono eyebrow above section headings. Never prose, buttons or prices. */
+@layer components {
+  .label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    line-height: 1.5;
+    text-transform: uppercase;
+  }
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The accent follows the mode over 420 ms; the toggle is the only slow transition on the page. */
+.accent-surface {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  transition: background-color var(--dur-slow) var(--ease-out), color var(--dur-slow) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { transition: none; }
+}

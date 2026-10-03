@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.output/
+.wxt/
+dist/
+.env
+.env.local
+server/bin/
+*.log
+.DS_Store
